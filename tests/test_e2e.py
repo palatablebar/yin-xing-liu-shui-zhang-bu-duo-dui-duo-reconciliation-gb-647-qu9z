@@ -5,7 +5,8 @@ from pathlib import Path
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
-PAGES = ("/", "/quarantine", "/candidates", "/matches", "/batches", "/export")
+PAGES = ("/", "/quarantine", "/candidates", "/matches", "/settlement",
+         "/batches", "/export")
 
 
 def test_full_pipeline_from_samples(client):
@@ -20,7 +21,7 @@ def test_full_pipeline_from_samples(client):
     assert client.get("/api/matches").json()["count"] == 11
 
 
-def test_all_six_pages_return_200(client, demo):
+def test_all_pages_return_200(client, demo):
     for path in PAGES:
         response = client.get(path)
         assert response.status_code == 200, path

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}核销{% endblock %}
+{% block body %}
+{% set s = summary %}
+<main class="page">
+  <header class="page-head">
+    <h1>核销</h1>
+    <span class="page-meta">{{ ledger.run_id or '无批次' }}</span>
+    {% if posted_plan %}<span class="chip">已记账 · {{ s.policy_label }}</span>
+    {% else %}<span class="chip">未记账 · 预览 {{ policy_names.get(preview_policy, preview_policy) }}</span>{% endif %}
+    <a class="btn" href="/matches">看匹配组</a>
+  </header>
+
+  {% if not ledger.run_id %}
+  <section class="panel"><p class="empty">还没有批次，先回工作台载入样例。</p></section>
+  {% else %}
+
+  <section class="panel">
+    <h2>策略取舍</h2>
+    <div class="table-wrap">
+      <table class="grid compact" id="policy-table">
+        <thead><tr><th>策略</th><th class="num">本次记账</th><th class="num">结清凭证</th><th class="num">部分核销</th><th class="num">仍等待</th><th class="num">暂缓组</th><th class="num">凭证尾款合计</th><th class="num">未用结算款</th><th>操作</th></tr></thead>
+        <tbody>
+        {% for key, item in quote.policies.items() %}
+          <tr class="{% if quote.posted_policy == key %}pair{% endif %}">
+            <td>{{ item.summary.policy_label }}{% if quote.recommended == key %} <span class="chip">推荐</span>{% endif %}</td>
+            <td class="num mono">{{ item.summary.posted_amount|money }}</td>
+            <td class="num mono">{{ item.summary.settled_vouchers }}</td>
+            <td class="num mono">{{ item.summary.partial_vouchers }}</td>
+            <td class="num mono">{{ item.summary.waiting_vouchers }}</td>
+            <td class="num mono">{{ item.summary.deferred_groups }}</td>
+            <td class="num mono">{{ item.summary.voucher_residual_amount|money }}</td>
+            <td class="num mono">{{ item.summary.unallocated_settlement_amount|money }}</td>
+            <td>
+              {% if not posted_plan %}
+              <button class="btn" data-policy="{{ key }}">按此策略记账</button>
+              {% elif quote.posted_policy == key %}
+              <button class="btn" data-revoke="{{ posted_plan }}">撤销后重记</button>
+              {% else %}
+              <span class="state">先撤销当前计划</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="empty">整笔等待不产生新尾款，但本次记账金额较少；允许部分核销记账更及时、尾款留待后续结算。两种策略的整笔配对完全相同，复核人只需比对「剩余额度是否落地」。</p>
+  </section>
+
+  <section class="panel">
+    <h2>凭证台账（原始 / 已核销 / 剩余 / 承担结算）</h2>
+    <div class="table-wrap">
+      <table class="grid" id="voucher-table">
+        <thead><tr><th>凭证号</th><th>账户</th><th>时间</th><th class="num">原始金额</th><th class="num">往期已核销</th><th class="num">本次核销</th><th class="num">剩余金额</th><th>状态</th><th>结算组合</th></tr></thead>
+        <tbody>
+        {% for row in vouchers %}
+          <tr class="{% if row.carryover %}carryover{% endif %}">
+            <td class="mono">{{ row.txn_no }}{% if row.carryover %} <span class="chip">结转</span>{% endif %}</td>
+            <td class="mono">{{ row.account }}</td>
+            <td class="mono">{{ row.posted_at|localdt }}</td>
+            <td class="num mono">{{ row.original|money }}</td>
+            <td class="num mono">{{ row.applied_before|money }}</td>
+            <td class="num mono">{{ row.applied_now|money }}</td>
+            <td class="num mono">{{ row.remaining|money }}</td>
+            <td class="state">{{ row.status|status_label }}</td>
+            <td class="mono">{% for leg in row.legs %}<span class="chip">{{ leg.bank_txn_no }} {{ leg.amount|money }}</span>{% else %}-{% endfor %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if not vouchers %}<p class="empty">没有有效凭证。</p>{% endif %}
+    </div>
+  </section>
+
+  {% if allocations %}
+  <section class="panel">
+    <h2>本次分录（{{ allocations|length }} 条）</h2>
+    <div class="table-wrap">
+      <table class="grid" id="allocation-table">
+        <thead><tr><th class="num">#</th><th>结算流水</th><th>凭证</th><th>账户</th><th class="num">核销金额</th><th>来源</th></tr></thead>
+        <tbody>
+        {% for item in allocations %}
+          <tr>
+            <td class="num mono">{{ item.seq + 1 }}</td>
+            <td class="mono">{{ item.bank_txn_no }}</td>
+            <td class="mono">{{ item.ledger_txn_no }}</td>
+            <td class="mono">{{ item.account }}</td>
+            <td class="num mono">{{ item.amount|money }}</td>
+            <td class="state">{% if item.carryover %}结转尾款{% else %}匹配组{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if carryovers %}
+  <section class="panel">
+    <h2>待结转尾款（{{ carryovers|length }} 张）</h2>
+    <div class="table-wrap">
+      <table class="grid compact">
+        <thead><tr><th>凭证号</th><th>账户</th><th>时间</th><th class="num">原始金额</th><th class="num">剩余金额</th></tr></thead>
+        <tbody>
+        {% for item in carryovers %}
+          <tr><td class="mono">{{ item.txn_no }}</td><td class="mono">{{ item.account }}</td><td class="mono">{{ item.posted_at|localdt }}</td><td class="num mono">{{ item.original|money }}</td><td class="num mono">{{ item.remaining|money }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if plans %}
+  <section class="panel">
+    <h2>核销计划历史</h2>
+    <div class="table-wrap">
+      <table class="grid compact">
+        <thead><tr><th>计划号</th><th>批次</th><th>策略</th><th class="num">记账金额</th><th>状态</th><th>生成时间</th></tr></thead>
+        <tbody>
+        {% for item in plans %}
+          <tr>
+            <td class="mono"><a href="/api/settlement/{{ item.plan_id }}">{{ item.plan_id }}</a></td>
+            <td class="mono">{{ item.run_id }}</td>
+            <td>{{ item.policy_label }}</td>
+            <td class="num mono">{{ item.posted_amount|money }}</td>
+            <td class="state">{{ item.status|status_label }}</td>
+            <td class="mono">{{ item.created_at|localdt }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+  {% endif %}
+</main>
+{% endblock %}

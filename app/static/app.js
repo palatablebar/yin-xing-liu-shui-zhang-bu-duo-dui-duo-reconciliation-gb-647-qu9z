@@ -52,8 +52,49 @@ async function runAction(name) {
   }
 }
 
+async function postSettlement(policy) {
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    const url = policy ? "/api/settlement?policy=" + encodeURIComponent(policy)
+      : "/api/settlement";
+    const data = await post(url);
+    flash(data.created ? "已记账 " + data.summary.posted_amount + " 元" : "该方案已记过账，未重复写入", "ok");
+    window.location.reload();
+  } catch (error) {
+    flash(error.message);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function revokePlan(planId) {
+  if (state.busy) return;
+  if (!window.confirm("撤销这份计划？分录会保留为审计证据，但不再参与余额计算。")) return;
+  setBusy(true);
+  try {
+    await post("/api/settlement/" + encodeURIComponent(planId) + "/revoke");
+    flash("计划已撤销，可以按另一策略重记", "ok");
+    window.location.reload();
+  } catch (error) {
+    flash(error.message);
+  } finally {
+    setBusy(false);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("click", (event) => {
+    const policyButton = event.target.closest("[data-policy]");
+    if (policyButton) {
+      postSettlement(policyButton.dataset.policy);
+      return;
+    }
+    const revokeButton = event.target.closest("[data-revoke]");
+    if (revokeButton) {
+      revokePlan(revokeButton.dataset.revoke);
+      return;
+    }
     const button = event.target.closest("[data-action]");
     if (button) runAction(button.dataset.action);
   });

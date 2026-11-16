@@ -21,7 +21,8 @@ def _money(value) -> str:
     return str(value)
 
 
-def report_text(records: list[dict], matches: list[dict], reconciliation: dict) -> str:
+def report_text(records: list[dict], matches: list[dict], reconciliation: dict,
+                settlement: dict | None = None) -> str:
     totals = reconciliation["totals"]
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -72,6 +73,41 @@ def report_text(records: list[dict], matches: list[dict], reconciliation: dict) 
             "",
             reasons.label(item["reason"]),
         ])
+
+    if settlement:
+        for row in settlement["vouchers"]:
+            writer.writerow([
+                "凭证核销",
+                row["txn_no"],
+                "结转" if row.get("carryover") else "",
+                "",
+                "",
+                " ".join(leg["bank_txn_no"] for leg in row["legs"]),
+                row["txn_no"],
+                _money(Decimal(row["original"])),
+                _money(Decimal(row["applied_now"])),
+                _money(Decimal(row["remaining"])),
+                "",
+                "{} 已核销{} 剩余{}".format(
+                    row["status"], _money(Decimal(row["applied_before"])
+                                          + Decimal(row["applied_now"])),
+                    _money(Decimal(row["remaining"]))),
+            ])
+        for item in settlement["allocations"]:
+            writer.writerow([
+                "核销分录",
+                item["plan_id"],
+                "",
+                "",
+                "",
+                item["bank_txn_no"],
+                item["ledger_txn_no"],
+                _money(Decimal(item["amount"])),
+                "",
+                "",
+                "",
+                "结转尾款" if item.get("carryover") else "匹配组",
+            ])
 
     for record in records:
         if record["status"] != "quarantine":

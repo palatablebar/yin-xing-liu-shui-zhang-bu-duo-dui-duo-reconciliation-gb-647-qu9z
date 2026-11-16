@@ -22,6 +22,17 @@
 | M5 多对多求解 | 求解不重叠匹配组，看手续费分摊 | `POST /api/matches`、页面 `/matches` |
 | M6 差异与批次 | 看两侧守恒、差异归因与历史批次 | `GET /api/differences`、`GET /api/batches`、页面 `/batches` |
 | M7 报告导出 | 导出报告 CSV 与运行清单 JSON | `GET /api/export/report.csv`、`/api/export/manifest.json`、页面 `/export` |
+| M8 核销记账 | 比较整笔等待与部分核销，记账并跟踪尾款 | `GET /api/settlement/quote`、`POST /api/settlement`、页面 `/settlement` |
+
+## 核销规则（M8）
+
+- 组合只用 M5 已求出的匹配组，不另算一套；核销层只负责记账、留尾款、跨期延续。
+- `strict`（整笔等待）：会留下凭证尾款的整组暂缓，本次记账少但不产生新尾款。
+- `partial`（允许部分核销）：组内先整笔结清，剩余额度再部分核销一次，尾款留待后续结算。
+- 一张凭证最多被 `partial_max_legs`（默认 8）次结算共同承担；原始流水与凭证只读。
+- 尾款按「账户 + 业务号 + 原始金额」跨批次延续，下一期结算可继续结清。
+- 记账幂等：同一批次同一方案重试返回首次计划；换策略须先撤销旧计划（否则 409）。
+- 每张凭证页面与导出均列出原始金额、往期已核销、本次已核销、剩余金额与承担它的结算组合。
 
 ## 启动
 
@@ -29,7 +40,7 @@
 docker compose up -d --build
 ```
 
-打开 <http://127.0.0.1:18206/>，点「载入样例」即可跑完采信 → 质量 → 候选 → 匹配 → 差异 → 导出。
+打开 <http://127.0.0.1:18206/>，点「载入样例」即可跑完采信 → 质量 → 候选 → 匹配 → 核销 → 差异 → 导出。
 
 ## 演示步骤
 
@@ -38,7 +49,8 @@ docker compose up -d --build
 3. 打开「候选」，核对一对一 7 条、一对多 2 条、多对一 2 条。
 4. 打开「匹配」，看 11 组匹配与手续费分摊合计 22.31 元。
 5. 打开「批次」，核对银行笔数、账簿笔数、手续费分摊、匹配差额四项平衡。
-6. 打开「导出」，下载报告 CSV 与运行清单 JSON。
+6. 打开「核销」，比较整笔等待与部分核销，选定策略记账并查看尾款。
+7. 打开「导出」，下载报告 CSV 与运行清单 JSON。
 
 ## 测试
 
@@ -52,6 +64,7 @@ docker compose exec -T app python -m pytest -q
 - `/quarantine` 隔离区。
 - `/candidates` 候选清单。
 - `/matches` 匹配组。
+- `/settlement` 核销：策略取舍、凭证台账、本次分录与计划历史。
 - `/batches` 对账与批次历史。
 - `/export` 导出。
 
@@ -59,7 +72,7 @@ docker compose exec -T app python -m pytest -q
 
 ```text
 app/            平台层与七个功能模块
-app/templates/  base + 六个页面
+app/templates/  base + 七个页面
 app/static/     theme / layout / components + 三个脚本
 docs/           DEPTH、DATA-DICTIONARY、RUNBOOK
 sample_data/    六份脏样例与一份空白样例

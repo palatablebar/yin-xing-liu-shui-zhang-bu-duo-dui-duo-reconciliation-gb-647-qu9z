@@ -47,6 +47,12 @@ class Settings:
     tolerance: Decimal = Decimal("0.02")
     window_days: int = 3
     subset_max: int = 4
+    # 核销：一张凭证最多被多少次结算共同承担；超过后留尾款，等后续结算。
+    # 该值只进入核销方案 id，不进入对账 run_id（对账结果不因核销策略改变）。
+    partial_max_legs: int = 8
+    # 默认核销策略：出纳要尽快记账，同时尾款仍可后续结算，因此默认允许部分核销；
+    # 追求「不产生尾款、复核最省心」时切到 strict（整笔等待）。
+    settlement_policy: str = "partial"
     fee_quantum: Decimal = Decimal("0.01")
     tz_name: str = "Asia/Shanghai"
     sample_dir: str = str(PROJECT_DIR / "sample_data")
@@ -61,6 +67,7 @@ class Settings:
             rule_version=os.environ.get("RULE_VERSION", RULE_VERSION),
             sample_dir=os.environ.get("SAMPLE_DIR", str(PROJECT_DIR / "sample_data")),
             tz_name=os.environ.get("TZ", "Asia/Shanghai"),
+            settlement_policy=os.environ.get("SETTLEMENT_POLICY", "partial"),
         )
 
     def params(self) -> dict:

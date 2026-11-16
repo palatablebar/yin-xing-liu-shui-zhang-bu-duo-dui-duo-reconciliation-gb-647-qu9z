@@ -5,6 +5,7 @@ services:
     environment:
       LEDGERBANK_DB: /data/ledgerbank.sqlite
       TZ: Asia/Shanghai
+      SETTLEMENT_POLICY: ${SETTLEMENT_POLICY:-partial}
     ports:
       - "18206:8000"
     volumes:

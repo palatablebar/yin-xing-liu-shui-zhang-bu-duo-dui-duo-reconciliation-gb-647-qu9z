@@ -15,6 +15,7 @@ from .modules.m5_matching.subset import TIER_NAMES
 from .modules.m6_diff import differences as differences_mod
 from .modules.m6_diff import history as history_mod
 from .modules.m7_export import service as export_service
+from .modules.m8_settlement import service as settlement_service
 
 TEMPLATE_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
@@ -25,6 +26,7 @@ NAV = (
     ("隔离区", "/quarantine"),
     ("候选", "/candidates"),
     ("匹配", "/matches"),
+    ("核销", "/settlement"),
     ("批次", "/batches"),
     ("导出", "/export"),
 )
@@ -85,6 +87,12 @@ STATUS_LABELS = {
     "partial_bank": "仅银行",
     "partial_ledger": "仅账簿",
     "empty": "空批次",
+    "settled": "已结清",
+    "partial": "部分核销",
+    "waiting": "等待结算",
+    "over_applied": "超额核销",
+    "posted": "已记账",
+    "revoked": "已撤销",
 }
 
 TOTAL_LABELS = {
@@ -200,6 +208,28 @@ def setup(app: FastAPI) -> None:
             "fee_total": fee_total,
         })
         return render(request, "matches.html", context)
+
+    @app.get("/settlement")
+    def settlement(request: Request):
+        store = request.app.state.store
+        settings = request.app.state.settings
+        context = base(request, "核销", "/settlement")
+        run = context["run"]
+        ledger = settlement_service.ledger_payload(store, run, settings)
+        quote = settlement_service.quote(store, run, settings)
+        context.update({
+            "ledger": ledger,
+            "quote": quote,
+            "policy_names": settlement_service.model.POLICIES,
+            "vouchers": ledger.get("vouchers") or [],
+            "allocations": ledger.get("allocations") or [],
+            "plans": ledger.get("plans") or [],
+            "summary": ledger.get("summary") or {},
+            "posted_plan": ledger.get("plan"),
+            "preview_policy": ledger.get("preview_policy"),
+            "carryovers": ledger.get("carryovers") or [],
+        })
+        return render(request, "settlement.html", context)
 
     @app.get("/batches")
     def batches(request: Request):
